@@ -6,11 +6,13 @@ use cw_storage_plus::Map;
 
 use cw20::{Balance, Cw20CoinVerified};
 
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct GenericBalance {
     pub native: Vec<Coin>,
     pub cw20: Vec<Cw20CoinVerified>,
 }
+
 
 impl GenericBalance {
     pub fn add_tokens(&mut self, add: Balance) {
@@ -46,6 +48,7 @@ impl GenericBalance {
         };
     }
 }
+
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Escrow {

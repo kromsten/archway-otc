@@ -20,18 +20,27 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    _msg: InstantiateMsg,
+    msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = State {
-        owner: info.sender.clone(),
-    };
+
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    let state = State { 
+        active: true,
+        index: 0,
+        otc_code_hash: msg.otc_code_hash,
+        admin: deps.api.addr_canonicalize(info.sender.as_str())?
+    };
+
     STATE.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender))
 }
+
+
+
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
