@@ -1,16 +1,19 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg,
 };
 use cw2::set_contract_version;
 
+use::cw20::Denom;
+
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, HelloResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg};
 use crate::state::{State, STATE};
+use crate::otc_msg::{UserInfo, OTCInitMsg};
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:factory";
+const CONTRACT_NAME: &str = "crates.io:otc_factory";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 
@@ -42,16 +45,96 @@ pub fn instantiate(
 
 
 
+
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
-    _info: MessageInfo,
+    env: Env,
+    info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Dummy {} => try_execute(deps),
+        ExecuteMsg::NewOTC {
+            label, 
+            sell_denom, 
+            sell_amount, 
+            ask_denom, 
+            ask_amount, 
+            ends_at, 
+            user_info, 
+            description } => try_create_otc(
+                deps,
+                env,
+                info.sender,
+                label, 
+                sell_denom, 
+                ask_denom, 
+                sell_amount,
+                ask_amount,
+                ends_at,
+                user_info,
+                description
+            ),
     }
+}
+
+
+pub fn try_create_otc(
+    deps: DepsMut,
+    env: Env,
+    seller: Addr,
+    label: String,
+    sell_denom: Denom,
+    ask_denom: Denom,
+    sell_amount : Uint128,
+    ask_amount: Uint128,
+    ends_at: u64,
+    user_info: Option<UserInfo>,
+    description: Option<String>,
+    ) -> Result<Response, ContractError> {
+    
+
+    let config = STATE.load(deps.storage)?;
+
+
+    if !config.active {
+        return Err(ContractError::Std(
+            StdError::GenericErr { 
+                msg: "The factory has been stopped.  No new otc can be created".to_string() 
+            }
+        ));
+    }
+
+    let init_msg_content = OTCInitMsg {
+        index: config.index,
+        seller,
+        sell_denom,
+        ask_denom,
+        sell_amount,
+        ask_amount,
+        ends_at,
+        user_info,
+        description,
+    };
+    
+    let instantiate_message = WasmMsg::Instantiate {
+        admin: Some(env.contract.address.into_string()),
+        code_id: config.otc_code_hash,
+        msg: to_binary(&init_msg_content)?,
+        funds: vec![],
+        label: label,
+    };
+
+
+    let submessage = SubMsg::reply_on_success(instantiate_message, config.index.clone());
+
+
+    Ok(Response::new()
+        .add_submessage(submessage)
+        .add_attribute("method", "create_new_otc")
+    )
+
 }
 
 pub fn try_execute(_deps: DepsMut) -> Result<Response, ContractError> {
@@ -83,7 +166,7 @@ mod tests {
     };
     use cosmwasm_std::{coins, from_binary};
 
-    #[test]
+    /* #[test]
     fn can_instantiate() {
         let mut deps = mock_dependencies();
 
@@ -97,9 +180,9 @@ mod tests {
             .unwrap()
             .value;
         assert_eq!("creator", owner);
-    }
+    } */
 
-    #[test]
+    /* #[test]
     fn can_execute() {
         let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
 
@@ -117,8 +200,10 @@ mod tests {
             _ => panic!("Must return not implemented error"),
         }
     }
+    */
 
-    #[test]
+
+    /* #[test]
     fn can_query() {
         let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
 
@@ -133,5 +218,5 @@ mod tests {
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(1000, "token"));
         instantiate(deps, mock_env(), info, msg).unwrap()
-    }
+    } */
 }
