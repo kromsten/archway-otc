@@ -1,9 +1,9 @@
-use cosmwasm_std::Uint128;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use cw20::{Denom, Balance};
+use cw20::{Balance, Cw20ReceiveMsg};
 
-use crate::otc_msg::UserInfo;
+use crate::state::UserInfo;
+
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -17,7 +17,6 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     NewOTC {
-
         ask_balance: Balance, 
 
         // seconds since epoch
@@ -29,7 +28,12 @@ pub enum ExecuteMsg {
         // optional description
         description: Option<String>
     },
+
+    /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
+    Receive(Cw20ReceiveMsg),
 }
+
+
 
 
 

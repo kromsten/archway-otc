@@ -5,13 +5,11 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 
-use cw20::Balance;
-use::cw20::Denom;
+use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified};
 
 use crate::error::ContractError;
 use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg};
-use crate::state::{State, STATE, OTCS, OTCInfo, GenericBalance};
-use crate::otc_msg::{UserInfo, OTCInitMsg, OTCInitResponse};
+use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc_factory";
@@ -51,7 +49,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -60,24 +58,69 @@ pub fn execute(
             ask_balance, 
             ends_at, 
             user_info, 
-            description } => try_create_otc(
-                deps,
-                env,
-                info.sender,
-                Balance::from(info.funds), 
-                ask_balance,    
-                ends_at,
-                user_info,
-                description
-            ),
+            description 
+        } => try_create_otc(
+            deps,
+            &info.sender,
+            Balance::from(info.funds), 
+            ask_balance,    
+            ends_at,
+            user_info,
+            description
+        ),
+        
+        ExecuteMsg::Receive(msg) => execute_receive(deps, info, msg)
     }
 }
 
 
+pub fn execute_receive(
+    deps: DepsMut,
+    info: MessageInfo,
+    wrapper: Cw20ReceiveMsg,
+) -> Result<Response, ContractError> {
+    let msg : ExecuteMsg = from_binary(&wrapper.msg)?;
+
+    let sell_balance = Balance::Cw20(Cw20CoinVerified {
+        address: info.sender,
+        amount: wrapper.amount,
+    });
+
+    let api = deps.api;
+
+    match msg {
+        ExecuteMsg::NewOTC { 
+            ask_balance, 
+            ends_at, 
+            user_info, 
+            description 
+        } => { 
+            try_create_otc(
+                deps, 
+                &api.addr_validate(&wrapper.sender)?,
+                sell_balance,
+                ask_balance, 
+                ends_at,
+                user_info,
+                description
+            )
+        }
+        _ => {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Unknown Receive message ".to_string() 
+                }
+            ));
+        }
+    }
+
+
+    
+}
+
 pub fn try_create_otc(
     deps: DepsMut,
-    env: Env,
-    seller: Addr,
+    seller: &Addr,
     sell_balance: Balance,
     ask_balance: Balance,
     ends_at: u64,
