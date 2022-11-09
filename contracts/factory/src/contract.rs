@@ -5,11 +5,12 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 
+use cw20::Balance;
 use::cw20::Denom;
 
 use crate::error::ContractError;
 use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg};
-use crate::state::{State, STATE, OTCS, OTCInfo};
+use crate::state::{State, STATE, OTCS, OTCInfo, GenericBalance};
 use crate::otc_msg::{UserInfo, OTCInitMsg, OTCInitResponse};
 
 // version info for migration info
@@ -56,22 +57,15 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::NewOTC {
-            label, 
-            sell_denom, 
-            sell_amount, 
-            ask_denom, 
-            ask_amount, 
+            ask_balance, 
             ends_at, 
             user_info, 
             description } => try_create_otc(
                 deps,
                 env,
                 info.sender,
-                label, 
-                sell_denom, 
-                ask_denom, 
-                sell_amount,
-                ask_amount,
+                Balance::from(info.funds), 
+                ask_balance,    
                 ends_at,
                 user_info,
                 description
@@ -84,18 +78,15 @@ pub fn try_create_otc(
     deps: DepsMut,
     env: Env,
     seller: Addr,
-    label: String,
-    sell_denom: Denom,
-    ask_denom: Denom,
-    sell_amount : Uint128,
-    ask_amount: Uint128,
+    sell_balance: Balance,
+    ask_balance: Balance,
     ends_at: u64,
     user_info: Option<UserInfo>,
     description: Option<String>,
     ) -> Result<Response, ContractError> {
     
 
-    let config = STATE.load(deps.storage)?;
+    let mut config = STATE.load(deps.storage)?;
 
 
     if !config.active {
@@ -106,32 +97,80 @@ pub fn try_create_otc(
         ));
     }
 
-    let init_msg_content = OTCInitMsg {
-        index: config.index,
-        seller,
-        sell_denom,
-        ask_denom,
-        sell_amount,
-        ask_amount,
+    let mut new_otc = OTCInfo {
+        seller: deps.api.addr_canonicalize(seller.as_str())?,
+        sell_native: false,
+        sell_amount: Uint128::from(0 as u8),
+        sell_denom: None,
+        sell_address: None,
+        ask_native: false,
+        ask_amount: Uint128::from(0 as u8),
+        ask_denom: None,
+        ask_address: None,
         ends_at,
         user_info,
-        description,
+        description
     };
+
+
+    match sell_balance {
+        Balance::Native(mut balance) => {
+
+            let coin = balance.0.pop().unwrap();
+
+            if balance.0.len() != 0 {
+                return Err(ContractError::Std(
+                    StdError::GenericErr { 
+                        msg: "Cannot create an otc with mupltiple denoms".to_string() 
+                    }
+                ));
+            }
+
+            new_otc.sell_native = true;
+            new_otc.sell_amount = coin.amount;
+            new_otc.sell_denom = Some(coin.denom);
+        },
+        Balance::Cw20(token) => {
+            new_otc.sell_native = false;
+            new_otc.sell_amount = token.amount;
+            new_otc.sell_address = Some(token.address);
+        }
+    };
+
+
+    match ask_balance {
+        Balance::Native(mut balance) => {
+
+            let coin = balance.0.pop().unwrap();
+
+            if balance.0.len() != 0 {
+                return Err(ContractError::Std(
+                    StdError::GenericErr { 
+                        msg: "Cannot create an otc with mupltiple denoms".to_string() 
+                    }
+                ));
+            }
+
+            new_otc.ask_native = true;
+            new_otc.ask_amount = coin.amount;
+            new_otc.ask_denom = Some(coin.denom);
+        },
+        Balance::Cw20(token) => {
+            new_otc.ask_native = false;
+            new_otc.ask_amount = token.amount;
+            new_otc.ask_address = Some(token.address);
+        }
+    };
+
     
-    let instantiate_message = WasmMsg::Instantiate {
-        admin: Some(env.contract.address.into_string()),
-        code_id: config.otc_code_hash,
-        msg: to_binary(&init_msg_content)?,
-        funds: vec![],
-        label: label,
-    };
 
-
-    let submessage = SubMsg::reply_on_success(instantiate_message, config.index.clone());
-
+    OTCS.save(deps.storage, &config.index.to_be_bytes(), &new_otc)?;
+    
+    config.index += 1;
+    STATE.save(deps.storage, &config)?; 
+   
 
     Ok(Response::new()
-        .add_submessage(submessage)
         .add_attribute("method", "create_new_otc")
     )
 
@@ -140,7 +179,7 @@ pub fn try_create_otc(
 
 
 
-
+/* 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
 
@@ -163,24 +202,23 @@ fn handle_instantiate_reply(deps: DepsMut, msg: Reply, mut config: State) -> Res
         StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
     })?;
 
-    
 
     OTCS.save(
         deps.storage, 
-        config.index,
+        &config.index.to_le_bytes(),
         &OTCInfo {}
     )?;
 
 
-    config.index += 1;
+    config.index += 1 ;
     STATE.save(deps.storage, &config)?;
 
-    
+
     Ok(Response::new())
 }
 
 
-
+ */
 
 pub fn try_execute(_deps: DepsMut) -> Result<Response, ContractError> {
     Err(ContractError::Std(StdError::generic_err("Not implemented")))

@@ -1,7 +1,7 @@
 use cosmwasm_std::Uint128;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use cw20::Denom;
+use cw20::{Denom, Balance};
 
 use crate::otc_msg::UserInfo;
 
@@ -17,20 +17,8 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     NewOTC {
-        /// String label for the otc
-        label: String,
 
-        // Denomination of currency being sold
-        sell_denom: Denom,
-
-        // Denomination of currency being asked
-        ask_denom: Denom,
-
-        /// amount of tokens being sold
-        sell_amount: Uint128,
-
-        /// (minimum) amount of tokens being sold
-        ask_amount: Uint128,
+        ask_balance: Balance, 
 
         // seconds since epoch
         ends_at: u64,

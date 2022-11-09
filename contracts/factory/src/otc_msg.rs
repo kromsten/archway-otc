@@ -5,12 +5,10 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Uint128};
 use cw20::Denom;
 
+use crate::state::UserInfo;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct UserInfo {
-    pub user: String,
-    pub account_type: Option<String>,
-}
+
+
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

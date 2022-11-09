@@ -1,8 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr};
+use cosmwasm_std::{CanonicalAddr, Addr, Coin, Uint128};
 use cw_storage_plus::{Item, Map};
+use cw20::{Balance, Cw20CoinVerified};
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -13,12 +14,30 @@ pub struct State {
     pub active: bool,
 }
 
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct UserInfo {
+    pub user: String,
+    pub account_type: Option<String>,
+}
 
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct OTCInfo {
-
+    pub seller: CanonicalAddr,
+    pub sell_native: bool,
+    pub sell_amount: Uint128,
+    pub sell_denom: Option<String>,
+    pub sell_address: Option<Addr>,
+    pub ask_native: bool,
+    pub ask_amount: Uint128,
+    pub ask_denom: Option<String>,
+    pub ask_address: Option<Addr>,
+    pub ends_at: u64,
+    pub user_info: Option<UserInfo>,
+    pub description: Option<String>,
 }
 
 
 pub const STATE: Item<State> = Item::new("state");
-pub const OTCS: Map<u64, OTCInfo> = Map::new("otcs");
+pub const OTCS: Map<&[u8], OTCInfo> = Map::new("otcs");
