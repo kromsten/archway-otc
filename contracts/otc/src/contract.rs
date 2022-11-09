@@ -1,13 +1,14 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr,
 };
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, HelloResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
+use cw20::Denom;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:factory";
@@ -20,12 +21,34 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    _msg: InstantiateMsg,
+    msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    if msg.sell_amount == Uint128::from(0 as u8) {
+        return Err(ContractError::Std(StdError::generic_err("Sell amount must be greater than 0")));
+    }
+
+    //let denom = msg.sell_denom as Denom;
+
+    if msg.sell_denom == msg.ask_denom {
+        return Err(ContractError::Std(StdError::generic_err(
+            "Sell contract and bid contract must be different",
+        )));
+    }
+    
+
+    let (denom, native) : (String, bool)  = match msg.sell_denom {
+        Denom::Native(denom ) => { (denom, true) }
+        Denom::Cw20(addr) => { (addr.to_string(), false) }
+    };
+
+
+
     let state = State {
         owner: info.sender.clone(),
     };
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     STATE.save(deps.storage, &state)?;
 
     Ok(Response::new()
@@ -63,7 +86,7 @@ fn hello_world() -> StdResult<HelloResponse> {
     })
 }
 
-#[cfg(test)]
+/* #[cfg(test)]
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{
@@ -123,3 +146,4 @@ mod tests {
         instantiate(deps, mock_env(), info, msg).unwrap()
     }
 }
+ */

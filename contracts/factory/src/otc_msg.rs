@@ -36,8 +36,6 @@ pub struct OTCInitMsg {
     // seconds since epoch
     pub ends_at: u64,
 
-  
-
     // optional user info
     pub user_info: Option<UserInfo>,
 

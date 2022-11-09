@@ -175,7 +175,7 @@ fn handle_instantiate_reply(deps: DepsMut, msg: Reply, mut config: State) -> Res
     config.index += 1;
     STATE.save(deps.storage, &config)?;
 
-    // Save res.contract_address
+    
     Ok(Response::new())
 }
 
