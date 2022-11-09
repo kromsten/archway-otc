@@ -45,3 +45,11 @@ pub struct OTCInitMsg {
     pub description: Option<String>,
 }
 
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct OTCInitResponse {
+    pub otc_address: Addr,
+
+}
+

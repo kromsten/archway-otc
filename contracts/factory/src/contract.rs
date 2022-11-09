@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg, Reply, from_binary,
 };
 use cw2::set_contract_version;
 
@@ -9,8 +9,8 @@ use::cw20::Denom;
 
 use crate::error::ContractError;
 use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg};
-use crate::state::{State, STATE};
-use crate::otc_msg::{UserInfo, OTCInitMsg};
+use crate::state::{State, STATE, OTCS, OTCInfo};
+use crate::otc_msg::{UserInfo, OTCInitMsg, OTCInitResponse};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc_factory";
@@ -136,6 +136,51 @@ pub fn try_create_otc(
     )
 
 }
+
+
+
+
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+
+    let config = STATE.load(deps.storage)?;
+    let index = config.index.clone();
+
+    if msg.id == index {
+        handle_instantiate_reply(deps, msg, config)
+    } else {
+        Err(ContractError::Std(StdError::generic_err(format!("Unknown reply id: {}", msg.id))))
+    }
+}
+
+fn handle_instantiate_reply(deps: DepsMut, msg: Reply, mut config: State) -> Result<Response, ContractError> {
+    // Handle the msg data and save the contract address
+    let data = msg.result.unwrap().data.unwrap();
+    
+
+    let res: OTCInitResponse = from_binary(&data).map_err(|_| {
+        StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
+    })?;
+
+    
+
+    OTCS.save(
+        deps.storage, 
+        config.index,
+        &OTCInfo {}
+    )?;
+
+
+    config.index += 1;
+    STATE.save(deps.storage, &config)?;
+
+    // Save res.contract_address
+    Ok(Response::new())
+}
+
+
+
 
 pub fn try_execute(_deps: DepsMut) -> Result<Response, ContractError> {
     Err(ContractError::Std(StdError::generic_err("Not implemented")))
