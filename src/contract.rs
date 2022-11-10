@@ -224,9 +224,14 @@ pub fn try_create_otc(
     };
 
 
+    while OTCS.has(deps.storage, &config.index.to_be_bytes()) {
+        config.index = (config.index + 1) % 1000;    
+    }
+
     OTCS.save(deps.storage, &config.index.to_be_bytes(), &new_otc)?;
     
-    config.index += 1;
+    
+    config.index = (config.index + 1) % 1000;    
     STATE.save(deps.storage, &config)?; 
    
 
@@ -331,7 +336,7 @@ pub fn try_swap(
     };
 
 
-    let config = STATE.load(deps.storage)?;
+    OTCS.remove(deps.storage, &otc_id.to_be_bytes());
 
 
     Ok(Response::new()

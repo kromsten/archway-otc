@@ -1,46 +1,90 @@
-# CW20 Escrow
+# Archway Network Starter Pack
 
-This is an escrow meta-contract that allows multiple users to
-create independent escrows. Each escrow has a sender, recipient,
-and arbiter. It also has a unique id (for future calls to reference it)
-and an optional timeout.
+This is a template to build smart contracts in Rust to run inside a
+[Cosmos SDK](https://github.com/cosmos/cosmos-sdk) module on all chains that enable it.
+To understand the framework better, please read the overview in the
+[archway repo](https://github.com/archway-network/archway/blob/main/README.md),
+and dig into the [archway docs](https://docs.archway.io).
 
-The basic function is the sender creates an escrow with funds.
-The arbiter may at any time decide to release the funds to either
-the intended recipient or the original sender (but no one else),
-and if it passes with optional timeout, anyone can refund the locked
-tokens to the original sender.
+The below instructions assume you understand the theory and just want to get coding.
 
-We also add a function called "top_up", which allows anyone to add more
-funds to the contract at any time.
+## Creating a new project from a template
 
-## Token types
+Assuming you have a recent version of rust and cargo (v1.51.0+) installed
+(via [rustup](https://rustup.rs/)),
+then the following should get you a new repo to start a contract:
 
-This contract is meant not just to be functional, but also to work as a simple
-example of an CW20 "Receiver". And demonstrate how the same calls can be fed
-native tokens (via typical `ExecuteMsg` route), or cw20 tokens (via `Receiver` interface).
+Install [cargo-generate](https://github.com/ashleygwilliams/cargo-generate) and cargo-run-script.
+If you didn't install them already, run the following commands:
 
-Both `create` and `top_up` can be called directly (with a payload of native tokens),
-or from a cw20 contract using the [Receiver Interface](../../packages/cw20/README.md#receiver).
-This means we can load the escrow with any number of native or cw20 tokens (or a mix),
-allow of which get released when the arbiter decides.
-
-## Running this contract
-
-You will need Rust 1.44.1+ with `wasm32-unknown-unknown` target installed.
-
-You can run unit tests on this via: 
-
-`cargo test`
-
-Once you are happy with the content, you can compile it to wasm via:
-
-```
-RUSTFLAGS='-C link-arg=-s' cargo wasm
-cp ../../target/wasm32-unknown-unknown/release/cw20_escrow.wasm .
-ls -l cw20_escrow.wasm
-sha256sum cw20_escrow.wasm
+```sh
+cargo install cargo-generate --features vendored-openssl
+cargo install cargo-run-script
 ```
 
-Or for a production-ready (optimized) build, run a build command in the
-the repository root: https://github.com/CosmWasm/cw-plus#compiling.
+Now, use it to create your new contract.
+Go to the folder in which you want to place it and run:
+
+```sh
+cargo generate --git archway-network/archway-templates.git --name PROJECT_NAME default
+```
+
+You will now have a new folder called `PROJECT_NAME` (I hope you changed that to something else)
+containing a simple working contract and build system that you can customize.
+
+## Create a Repo
+
+After generating, you have a initialized local git repo, but no commits, and no remote.
+Go to a server (eg. github) and create a new upstream repo (called `YOUR-GIT-URL` below).
+Then run the following:
+
+```sh
+# this is needed to create a valid Cargo.lock file (see below)
+cargo check
+git branch -M main
+git add .
+git commit -m 'Initial Commit'
+git remote add origin YOUR-GIT-URL
+git push -u origin main
+```
+
+## CI Support
+
+We have template configurations for both [GitHub Actions](.github/workflows/Basic.yml)
+and [Circle CI](.circleci/config.yml) in the generated project, so you can
+get up and running with CI right away.
+
+One note is that the CI runs all `cargo` commands
+with `--locked` to ensure it uses the exact same versions as you have locally. This also means
+you must have an up-to-date `Cargo.lock` file, which is not auto-generated.
+The first time you set up the project (or after adding any dep), you should ensure the
+`Cargo.lock` file is updated, so the CI will test properly. This can be done simply by
+running `cargo check` or `cargo unit-test`.
+
+## Using your project
+
+Once you have your custom repo, you should check out [Developing](./Developing.md) to explain
+more on how to run tests and develop code. Or go through the
+[online tutorial](https://docs.archway.io/docs/create/guides/my-first-dapp/start) to get a better feel
+of how to develop.
+
+[Publishing](./Publishing.md) contains useful information on how to publish your contract
+to the world, once you are ready to deploy it on a running blockchain. And
+[Importing](./Importing.md) contains information about pulling in other contracts or crates
+that have been published.
+
+Please replace this README file with information about your specific project. You can keep
+the `Developing.md` and `Publishing.md` files as useful referenced, but please set some
+proper description in the README.
+
+## Gitpod integration
+
+[Gitpod](https://www.gitpod.io/) container-based development platform will be enabled on your project by default.
+
+Workspace contains:
+
+- **rust**: for builds
+- [wasmd](https://github.com/CosmWasm/wasmd): for local node setup and client
+- **jq**: shell JSON manipulation tool
+
+Follow [Gitpod Getting Started](https://www.gitpod.io/docs/getting-started) and launch your workspace.
