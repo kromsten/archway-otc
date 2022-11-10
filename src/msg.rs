@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use cw20::{Balance, Cw20ReceiveMsg};
 
-use crate::state::UserInfo;
+use crate::state::{UserInfo, OTCInfo};
 
 
 
@@ -66,3 +66,13 @@ pub enum QueryMsg {
 pub struct HelloResponse {
     pub msg: String,
 }
+
+
+// We define a custom struct for each query response
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetOTCsResponse {
+    pub otcs: Vec<OTCInfo>
+}
+
+
+p

@@ -9,7 +9,7 @@ use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
-use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg};
+use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsResponse};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc_factory";
@@ -345,9 +345,10 @@ pub fn try_swap(
 
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Hello {} => to_binary(&hello_world()?),
+        QueryMsg::GetOtcs {} =>to_binary(&query_otcs(deps, env, msg)?)
     }
 }
 
@@ -356,6 +357,14 @@ fn hello_world() -> StdResult<HelloResponse> {
         msg: String::from("Hello, Archway!"),
     })
 }
+
+fn query_otcs(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<GetOTCsResponse> {
+
+
+    Ok(GetOTCsResponse { otcs: vec!() })
+}
+
+
 
 
 
