@@ -14,7 +14,7 @@ use crate::state::UserInfo;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct OTCInitMsg {
     /// auction index with the factory
-    pub index: u64,
+    pub index: u32,
 
     /// otc creator
     pub seller: Addr,

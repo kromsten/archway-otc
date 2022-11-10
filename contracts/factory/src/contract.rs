@@ -1,20 +1,34 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg, Reply, from_binary,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg, Reply, from_binary, BankMsg, CosmosMsg, Coin,
 };
 use cw2::set_contract_version;
 
-use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified};
+use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
-use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg};
+use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg};
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc_factory";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+
+macro_rules! cast {
+    ($target: expr, $pat: path) => {
+        {
+            if let $pat(a) = $target { // #1
+                a
+            } else {
+                panic!(
+                    "mismatch variant when cast to {}", 
+                    stringify!($pat)); // #2
+            }
+        }
+    };
+}
 
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -40,8 +54,6 @@ pub fn instantiate(
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender))
 }
-
-
 
 
 
@@ -79,9 +91,9 @@ pub fn execute_receive(
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
-    let msg : ExecuteMsg = from_binary(&wrapper.msg)?;
+    let msg : ReceiveMsg = from_binary(&wrapper.msg)?;
 
-    let sell_balance = Balance::Cw20(Cw20CoinVerified {
+    let balance = Balance::Cw20(Cw20CoinVerified {
         address: info.sender,
         amount: wrapper.amount,
     });
@@ -89,34 +101,32 @@ pub fn execute_receive(
     let api = deps.api;
 
     match msg {
-        ExecuteMsg::NewOTC { 
-            ask_balance, 
-            ends_at, 
-            user_info, 
-            description 
-        } => { 
+        ReceiveMsg::Create(msg) => { 
             try_create_otc(
                 deps, 
                 &api.addr_validate(&wrapper.sender)?,
-                sell_balance,
-                ask_balance, 
-                ends_at,
-                user_info,
-                description
+                balance,
+                msg.ask_balance, 
+                msg.ends_at,
+                msg.user_info,
+                msg.description
             )
         }
-        _ => {
-            return Err(ContractError::Std(
-                StdError::GenericErr { 
-                    msg: "Unknown Receive message ".to_string() 
-                }
-            ));
+        ReceiveMsg::Swap { otc_id } => {
+            try_swap(
+                deps, 
+                &api.addr_validate(&wrapper.sender)?, 
+                otc_id,
+                balance,
+                false
+            )
         }
     }
 
 
     
 }
+
 
 pub fn try_create_otc(
     deps: DepsMut,
@@ -158,7 +168,6 @@ pub fn try_create_otc(
 
     match sell_balance {
         Balance::Native(mut balance) => {
-
             let coin = balance.0.pop().unwrap();
 
             if balance.0.len() != 0 {
@@ -168,7 +177,6 @@ pub fn try_create_otc(
                     }
                 ));
             }
-
             new_otc.sell_native = true;
             new_otc.sell_amount = coin.amount;
             new_otc.sell_denom = Some(coin.denom);
@@ -219,6 +227,112 @@ pub fn try_create_otc(
 
 }
 
+
+
+pub fn try_swap(
+    deps: DepsMut,
+    payer: &Addr,
+    otc_id: u32,
+    balance: Balance,
+    native: bool,
+    ) -> Result<Response, ContractError> {
+    
+    let otc_info = OTCS.load(deps.storage, &otc_id.to_be_bytes())?;
+
+    if otc_info.ask_native ^ native {
+        return Err(ContractError::Std(
+            StdError::GenericErr { 
+                msg: "Wrong denomination".to_string() 
+            }
+        ));
+    }
+
+    let seller = deps.api.addr_humanize(&otc_info.seller)?;
+
+
+    let payment_1 : CosmosMsg = if native {
+        let casted =  cast!(balance, Balance::Native);
+        let coin = casted.0.pop().unwrap();
+        if casted.0.len() != 0 {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Can't accept multiple denoms at time".to_string() 
+                }
+            ));
+        }
+        if coin.denom != otc_info.ask_denom.unwrap() {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Wrong denomination".to_string() 
+                }
+            ));
+        }
+        if coin.amount < otc_info.ask_amount {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Send amount is smaller than what being asked".to_string() 
+                }
+            ));
+        }
+
+        CosmosMsg::Bank(BankMsg::Send { to_address: seller.into_string(), amount: vec!(coin) })
+        
+
+    } else {
+        let casted = cast!(balance, Balance::Cw20);
+
+        if casted.address != otc_info.ask_address.unwrap() {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Wrong cw20 token".to_string() 
+                }
+            ));
+        }
+        if casted.amount < otc_info.ask_amount {
+            return Err(ContractError::Std(
+                StdError::GenericErr { 
+                    msg: "Send amount is smaller than what being asked".to_string() 
+                }
+            ));
+        }
+
+        CosmosMsg::Wasm(WasmMsg::Execute { 
+            contract_addr: casted.address.to_string(), 
+            msg: to_binary(&Cw20ExecuteMsg::Transfer { recipient: seller.to_string(), amount: casted.amount })?, 
+            funds: vec!()
+        })
+        
+    };
+
+
+    let payment_2 : CosmosMsg = if otc_info.sell_native {
+        CosmosMsg::Bank(BankMsg::Send { 
+            to_address: payer.into_string(), 
+            amount: vec!(Coin { denom: otc_info.sell_denom.unwrap(), amount: otc_info.sell_amount }) 
+        })
+    } else {
+        CosmosMsg::Wasm(WasmMsg::Execute { 
+            contract_addr: otc_info.sell_address.unwrap().to_string(), 
+            msg: to_binary(&Cw20ExecuteMsg::Transfer { 
+                recipient: payer.to_string(), 
+                amount: otc_info.sell_amount 
+            })?, 
+            funds: vec!()
+        })
+    };
+
+
+    let config = STATE.load(deps.storage)?;
+
+
+    Ok(Response::new()
+        .add_messages(vec!(
+            payment_1,
+            payment_2
+        ))
+        .add_attribute("method", "swap")
+    )
+}
 
 
 

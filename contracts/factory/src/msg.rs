@@ -12,26 +12,45 @@ pub struct InstantiateMsg {
 }
 
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct NewOTC {
+    ask_balance: Balance, 
+
+    // seconds since epoch
+    ends_at: u64,
+
+    // optional user info
+    user_info: Option<UserInfo>,
+
+    // optional description
+    description: Option<String>
+},
+
+
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    NewOTC {
-        ask_balance: Balance, 
-
-        // seconds since epoch
-        ends_at: u64,
-
-        // optional user info
-        user_info: Option<UserInfo>,
-
-        // optional description
-        description: Option<String>
-    },
+    Create(NewOTC),
 
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReceiveMsg {
+    
+    Create(NewOTC),
+
+    Swap {
+        otc_id: u32
+    }
+}
+
+
+
 
 
 
