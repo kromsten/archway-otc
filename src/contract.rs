@@ -44,7 +44,6 @@ pub fn instantiate(
     let state = State { 
         active: true,
         index: 0,
-        otc_code_hash: msg.otc_code_hash,
         admin: deps.api.addr_canonicalize(info.sender.as_str())?
     };
 
@@ -66,19 +65,14 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::NewOTC {
-            ask_balance, 
-            ends_at, 
-            user_info, 
-            description 
-        } => try_create_otc(
+        ExecuteMsg::Create(msg) => try_create_otc(
             deps,
             &info.sender,
             Balance::from(info.funds), 
-            ask_balance,    
-            ends_at,
-            user_info,
-            description
+            msg.ask_balance,    
+            msg.ends_at,
+            msg.user_info,
+            msg.description
         ),
 
         ExecuteMsg::Swap { otc_id } => try_swap(
@@ -265,7 +259,7 @@ pub fn try_swap(
 
 
     let payment_1 : CosmosMsg = if native {
-        let casted =  cast!(balance, Balance::Native);
+        let mut casted =  cast!(balance, Balance::Native);
         let coin = casted.0.pop().unwrap();
         if casted.0.len() != 0 {
             return Err(ContractError::Std(
@@ -321,7 +315,7 @@ pub fn try_swap(
 
     let payment_2 : CosmosMsg = if otc_info.sell_native {
         CosmosMsg::Bank(BankMsg::Send { 
-            to_address: payer.into_string(), 
+            to_address: payer.clone().into_string(), 
             amount: vec!(Coin { denom: otc_info.sell_denom.unwrap(), amount: otc_info.sell_amount }) 
         })
     } else {
@@ -374,7 +368,7 @@ mod tests {
     };
     use cosmwasm_std::{coins, from_binary};
 
-    /* #[test]
+    #[test]
     fn can_instantiate() {
         let mut deps = mock_dependencies();
 
@@ -388,7 +382,7 @@ mod tests {
             .unwrap()
             .value;
         assert_eq!("creator", owner);
-    } */
+    }
 
     /* #[test]
     fn can_execute() {
@@ -421,10 +415,11 @@ mod tests {
         let value: HelloResponse = from_binary(&res).unwrap();
         assert_eq!("Hello, Archway!", value.msg);
     }
+    */
 
     fn instantiate_contract(deps: DepsMut) -> Response {
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(1000, "token"));
         instantiate(deps, mock_env(), info, msg).unwrap()
-    } */
+    } 
 }

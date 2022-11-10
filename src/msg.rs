@@ -8,23 +8,22 @@ use crate::state::UserInfo;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub otc_code_hash: u64
 }
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct NewOTC {
-    ask_balance: Balance, 
+    pub ask_balance: Balance, 
 
     // seconds since epoch
-    ends_at: u64,
+    pub ends_at: u64,
 
     // optional user info
-    user_info: Option<UserInfo>,
+    pub user_info: Option<UserInfo>,
 
     // optional description
-    description: Option<String>
-},
+    pub description: Option<String>
+}
 
 
 
@@ -59,6 +58,7 @@ pub enum ReceiveMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Hello {},
+    GetOtcs {}
 }
 
 // We define a custom struct for each query response

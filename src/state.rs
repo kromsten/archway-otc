@@ -8,7 +8,6 @@ use cw_storage_plus::{Item, Map};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub admin: CanonicalAddr,
-    pub otc_code_hash: u64,
     pub index: u32,
     pub active: bool,
 }
