@@ -34,6 +34,10 @@ pub struct NewOTC {
 pub enum ExecuteMsg {
     Create(NewOTC),
 
+    Swap {
+        otc_id: u32
+    },
+
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
 }
@@ -48,11 +52,6 @@ pub enum ReceiveMsg {
         otc_id: u32
     }
 }
-
-
-
-
-
 
 
 

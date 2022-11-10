@@ -8,8 +8,8 @@ use cw2::set_contract_version;
 use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
-use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg};
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
+use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc_factory";
@@ -80,8 +80,18 @@ pub fn execute(
             user_info,
             description
         ),
+
+        ExecuteMsg::Swap { otc_id } => try_swap(
+            deps, 
+            &info.sender, 
+            otc_id,
+            Balance::from(info.funds),
+            true
+        ),
         
-        ExecuteMsg::Receive(msg) => execute_receive(deps, info, msg)
+        ExecuteMsg::Receive(msg) => {
+            execute_receive(deps, info, msg)
+        }
     }
 }
 
@@ -213,7 +223,6 @@ pub fn try_create_otc(
         }
     };
 
-    
 
     OTCS.save(deps.storage, &config.index.to_be_bytes(), &new_otc)?;
     
@@ -335,52 +344,6 @@ pub fn try_swap(
 }
 
 
-
-/* 
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
-
-    let config = STATE.load(deps.storage)?;
-    let index = config.index.clone();
-
-    if msg.id == index {
-        handle_instantiate_reply(deps, msg, config)
-    } else {
-        Err(ContractError::Std(StdError::generic_err(format!("Unknown reply id: {}", msg.id))))
-    }
-}
-
-fn handle_instantiate_reply(deps: DepsMut, msg: Reply, mut config: State) -> Result<Response, ContractError> {
-    // Handle the msg data and save the contract address
-    let data = msg.result.unwrap().data.unwrap();
-    
-
-    let res: OTCInitResponse = from_binary(&data).map_err(|_| {
-        StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
-    })?;
-
-
-    OTCS.save(
-        deps.storage, 
-        &config.index.to_le_bytes(),
-        &OTCInfo {}
-    )?;
-
-
-    config.index += 1 ;
-    STATE.save(deps.storage, &config)?;
-
-
-    Ok(Response::new())
-}
-
-
- */
-
-pub fn try_execute(_deps: DepsMut) -> Result<Response, ContractError> {
-    Err(ContractError::Std(StdError::generic_err("Not implemented")))
-    // TODO: Ok(Response::new().add_attribute("method", "try_execute"))
-}
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
