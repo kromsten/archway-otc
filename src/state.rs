@@ -38,4 +38,4 @@ pub struct OTCInfo {
 
 
 pub const STATE: Item<State> = Item::new("state");
-pub const OTCS: Map<&[u8], OTCInfo> = Map::new("otcs");
+pub const OTCS: Map<u32, OTCInfo> = Map::new("otcs");

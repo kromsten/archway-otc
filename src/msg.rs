@@ -57,22 +57,13 @@ pub enum ReceiveMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    Hello {},
     GetOtcs {}
 }
 
-// We define a custom struct for each query response
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct HelloResponse {
-    pub msg: String,
-}
 
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GetOTCsResponse {
-    pub otcs: Vec<OTCInfo>
+    pub otcs: Vec<(u32, OTCInfo)>
 }
-
-
-p

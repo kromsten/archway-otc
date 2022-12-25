@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg, Reply, from_binary, BankMsg, CosmosMsg, Coin,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Addr, WasmMsg, SubMsg, Reply, from_binary, BankMsg, CosmosMsg, Coin, Order,
 };
 use cw2::set_contract_version;
 
@@ -9,10 +9,10 @@ use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
-use crate::msg::{HelloResponse, InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsResponse};
+use crate::msg::{InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsResponse};
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:otc_factory";
+const CONTRACT_NAME: &str = "crates.io:otc";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 
@@ -218,11 +218,11 @@ pub fn try_create_otc(
     };
 
 
-    while OTCS.has(deps.storage, &config.index.to_be_bytes()) {
+    while OTCS.has(deps.storage, config.index) {
         config.index = (config.index + 1) % 1000;    
     }
 
-    OTCS.save(deps.storage, &config.index.to_be_bytes(), &new_otc)?;
+    OTCS.save(deps.storage, config.index, &new_otc)?;
     
     
     config.index = (config.index + 1) % 1000;    
@@ -245,7 +245,7 @@ pub fn try_swap(
     native: bool,
     ) -> Result<Response, ContractError> {
     
-    let otc_info = OTCS.load(deps.storage, &otc_id.to_be_bytes())?;
+    let otc_info = OTCS.load(deps.storage, otc_id)?;
 
     if otc_info.ask_native ^ native {
         return Err(ContractError::Std(
@@ -330,8 +330,8 @@ pub fn try_swap(
     };
 
 
-    OTCS.remove(deps.storage, &otc_id.to_be_bytes());
-
+    OTCS.remove(deps.storage, otc_id);
+    
 
     Ok(Response::new()
         .add_messages(vec!(
@@ -347,21 +347,23 @@ pub fn try_swap(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Hello {} => to_binary(&hello_world()?),
         QueryMsg::GetOtcs {} =>to_binary(&query_otcs(deps, env, msg)?)
     }
 }
 
-fn hello_world() -> StdResult<HelloResponse> {
-    Ok(HelloResponse {
-        msg: String::from("Hello, Archway!"),
-    })
-}
-
-fn query_otcs(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<GetOTCsResponse> {
 
 
-    Ok(GetOTCsResponse { otcs: vec!() })
+fn query_otcs(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<GetOTCsResponse> {
+    let result : StdResult<Vec<_>> = OTCS.range(
+                        deps.storage, 
+                        None, 
+                        None, 
+                        Order::Ascending
+                    )
+                    .collect();
+
+    //OTCS.load(deps.storage, )
+    Ok(GetOTCsResponse { otcs: result? })
 }
 
 
