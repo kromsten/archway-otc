@@ -9,7 +9,7 @@ use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
-use crate::msg::{InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsResponse};
+use crate::msg::{InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsResponse, NewOTCResponse};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:otc";
@@ -36,7 +36,7 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
 
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -154,6 +154,7 @@ pub fn try_create_otc(
         ));
     }
 
+
     let mut new_otc = OTCInfo {
         seller: deps.api.addr_canonicalize(seller.as_str())?,
         sell_native: false,
@@ -173,6 +174,7 @@ pub fn try_create_otc(
     match sell_balance {
         Balance::Native(mut balance) => {
             let coin = balance.0.pop().unwrap();
+
 
             if balance.0.len() != 0 {
                 return Err(ContractError::Std(
@@ -225,11 +227,16 @@ pub fn try_create_otc(
     OTCS.save(deps.storage, config.index, &new_otc)?;
     
     
-    config.index = (config.index + 1) % 1000;    
     STATE.save(deps.storage, &config)?; 
    
 
+    let data = NewOTCResponse {
+        id: config.index,
+        otc: new_otc
+    };
+
     Ok(Response::new()
+        .set_data(to_binary(&data).unwrap())
         .add_attribute("method", "create_new_otc")
     )
 
@@ -373,11 +380,92 @@ fn query_otcs(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<GetOTCsRespons
 
 #[cfg(test)]
 mod tests {
+    use crate::msg::{NewOTC, NewOTCResponse};
+
     use super::*;
     use cosmwasm_std::testing::{
-        mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
+        mock_dependencies, mock_env, mock_info,
     };
     use cosmwasm_std::{coins, from_binary};
+    use cw_utils::NativeBalance;
+
+
+    fn sell_native_ask_native(deps : DepsMut, count: u32) {
+
+        let sell_amount = 5;
+        let sell_denom = "token_1";
+
+        let ask_amount = 10;
+        let ask_denom = "token_2";
+
+        let api = deps.api;
+
+
+        let info = mock_info(
+            "alice", 
+            &coins(
+            sell_amount.clone(), 
+            sell_denom.clone()
+        ));
+        
+        let msg = ExecuteMsg::Create(NewOTC {
+            ask_balance: Balance::Native(NativeBalance(coins(ask_amount.clone(), ask_denom.clone()))),
+            ends_at: 100,
+            user_info: None,
+            description: None,
+        });
+
+        let res = execute(deps, mock_env(), info, msg);
+        match res {
+            Ok(Response { 
+                messages: _, 
+                attributes, 
+                events: _, 
+                data, .. 
+            }) => {
+                let attr = attributes
+                .iter()
+                .find(|a| a.key == "method")
+                .unwrap();
+
+                assert!(attr.value == "create_new_otc");
+
+
+                let res : NewOTCResponse = from_binary(&data.unwrap()).unwrap();
+
+                api.debug(&format!("Left: {}, Right: {}", res.id, count));
+
+                assert!(res.id == count);
+                
+                let info = res.otc;
+
+                assert_eq!(info.ask_native, true);
+                assert_eq!(info.ask_amount, Uint128::from(ask_amount));
+                assert_eq!(info.ask_denom, Some(ask_denom.to_string()));
+
+                assert_eq!(info.sell_native, true);
+                assert_eq!(info.sell_amount, Uint128::from(sell_amount));
+                assert_eq!(info.sell_denom, Some(sell_denom.to_string()));
+
+                assert_eq!(info.ends_at, 100);
+
+                // asserts other fields of OTCInfo struct
+                assert_eq!(info.user_info, None);
+                assert_eq!(info.description, None);
+
+            }
+            
+            Err(ContractError::Std(StdError::GenericErr { msg })) => {
+                panic!("Error {}", msg.as_str())
+            },
+            Err(ContractError::Unauthorized {  }) => {
+                panic!("Unauthorized ")
+            },
+            _ => {
+                panic!("Unknown error")
+            }
+        }
+    }
 
     #[test]
     fn can_instantiate() {
@@ -395,25 +483,16 @@ mod tests {
         assert_eq!("creator", owner);
     }
 
-    /* #[test]
-    fn can_execute() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
+    #[test]
+    fn can_create_native() {
+        let mut deps = mock_dependencies();
 
         instantiate_contract(deps.as_mut());
+        sell_native_ask_native(deps.as_mut(), 0);
 
-        let info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Dummy {};
 
-        // TODO: fix this test when execute() is implemented
-        let res = execute(deps.as_mut(), mock_env(), info, msg);
-        match res {
-            Err(ContractError::Std(StdError::GenericErr { msg })) => {
-                assert_eq!("Not implemented", msg)
-            }
-            _ => panic!("Must return not implemented error"),
-        }
     }
-    */
+   
 
 
     /* #[test]

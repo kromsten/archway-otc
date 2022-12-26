@@ -67,3 +67,10 @@ pub enum QueryMsg {
 pub struct GetOTCsResponse {
     pub otcs: Vec<(u32, OTCInfo)>
 }
+
+// We define a custom struct for each query response
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct NewOTCResponse {
+    pub id: u32,
+    pub otc: OTCInfo,
+}
