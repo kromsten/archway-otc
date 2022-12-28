@@ -1,3 +1,4 @@
+use cw_utils::Expiration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use cw20::{Balance, Cw20ReceiveMsg};
@@ -16,7 +17,7 @@ pub struct NewOTC {
     pub ask_balance: Balance, 
 
     // seconds since epoch
-    pub ends_at: u64,
+    pub ends_at: Option<Expiration>,
 
     // optional user info
     pub user_info: Option<UserInfo>,
@@ -57,7 +58,11 @@ pub enum ReceiveMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetOtcs {}
+    GetOtcs { 
+        include_expired: Option<bool>,
+        start_after: Option<u32>,
+        limit: Option<u32>
+    },
 }
 
 

@@ -8,6 +8,16 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized {},
+
+    #[error("Too many denoms")]
+    TooManyDenoms {},
+
+    #[error("Wrong denomination")]
+    WrongDenom {},
+
+    #[error("Cannot set approval that is already expired")]
+    Expired {},
+
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
 }

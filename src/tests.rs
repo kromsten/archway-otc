@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use crate::{ContractError, contract};
     use crate::contract::{execute, instantiate, query};
+    use crate::error::ContractError;
     use crate::msg::{NewOTC, NewOTCResponse, ExecuteMsg, InstantiateMsg, QueryMsg, GetOTCsResponse};
 
     use cosmwasm_std::testing::{
         mock_dependencies, mock_env, mock_info, mock_dependencies_with_balances, 
     };
-    use cosmwasm_std::{coins, from_binary, DepsMut, Response, Uint128, StdError, Coin, Deps, Api};
+    use cosmwasm_std::{coins, from_binary, DepsMut, Response, Uint128,  Coin, Deps, Api};
     use cw20::Balance;
-    use cw_utils::NativeBalance;
+    use cw_utils::{NativeBalance, Expiration};
 
 
     fn sell_native_ask_native(deps : DepsMut, count: u32) {
@@ -35,7 +35,7 @@ mod tests {
         
         let msg = ExecuteMsg::Create(NewOTC {
             ask_balance: Balance::Native(NativeBalance(coins(ask_amount.clone(), ask_denom.clone()))),
-            ends_at: 100,
+            ends_at: None,
             user_info: None,
             description: None,
         });
@@ -70,7 +70,7 @@ mod tests {
                 assert_eq!(info.sell_amount, Uint128::from(sell_amount));
                 assert_eq!(info.sell_denom, Some(sell_denom.to_string()));
 
-                assert_eq!(info.ends_at, 100);
+                assert_eq!(info.expires, Expiration::Never {} );
 
                 // asserts other fields of OTCInfo struct
                 assert_eq!(info.user_info, None);
@@ -85,7 +85,11 @@ mod tests {
 
 
     fn query_otcs(deps: Deps) -> GetOTCsResponse {
-        let res = query(deps, mock_env(), QueryMsg::GetOtcs {}).unwrap();
+        let res = query(deps, mock_env(), QueryMsg::GetOtcs {
+            include_expired: None,
+            limit: None,
+            start_after: None,
+        }).unwrap();
         let value: GetOTCsResponse = from_binary(&res).unwrap();
         value
     }
@@ -116,11 +120,7 @@ mod tests {
         ]);
 
 
-        let api = deps.api.clone();
         let count = 0;
-        
-
-        
 
         instantiate_contract(deps.as_mut());
         
@@ -165,37 +165,19 @@ mod tests {
         let msg = ExecuteMsg::Swap { otc_id: count.clone() };
 
         let res = execute(deps.as_mut(), mock_env(), same_person_info, msg.clone()).unwrap_err();
-        match res {
-            ContractError::Std(StdError::GenericErr { msg }) => {
-                assert_eq!(msg, "Can't swap with yourself");
-            }
-            _ => panic!("Unexpected error: {:?}", res),
-        }
+        assert_eq!(res.to_string(), "Can't swap with yourself");
+
 
         let res = execute(deps.as_mut(), mock_env(), smaller_amount_info, msg.clone()).unwrap_err();
-        match res {
-            ContractError::Std(StdError::GenericErr { msg }) => {
-                assert_eq!(msg, "Sent amount is smaller than what being asked");
-            }
-            _ => panic!("Unexpected error: {:?}", res),
-        }
+        assert_eq!(res.to_string(), "Sent amount is smaller than what being asked");
+     
 
         let res = execute(deps.as_mut(), mock_env(), wrong_denom_info, msg.clone()).unwrap_err();
-        match res {
-            ContractError::Std(StdError::GenericErr { msg }) => {
-                assert_eq!(msg, "Wrong denomination");
-            }
-            _ => panic!("Unexpected error: {:?}", res),   
-        }
+        assert_eq!(res.to_string(), ContractError::WrongDenom {}.to_string());
+       
 
         let res = execute(deps.as_mut(), mock_env(), multiple_tokens_info, msg.clone()).unwrap_err();
-        match res {
-            ContractError::Std(StdError::GenericErr { msg }) => {
-                assert_eq!(msg, "Can't accept multiple denoms at time");
-            }
-            _ => panic!("Unexpected error: {:?}", res),
-            
-        }
+        assert_eq!(res.to_string(), ContractError::TooManyDenoms {}.to_string());
 
 
         let res = execute(deps.as_mut(), mock_env(), right_info, msg.clone()).unwrap();

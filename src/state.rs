@@ -1,3 +1,4 @@
+use cw_utils::Expiration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +32,7 @@ pub struct OTCInfo {
     pub ask_amount: Uint128,
     pub ask_denom: Option<String>,
     pub ask_address: Option<Addr>,
-    pub ends_at: u64,
+    pub expires: Expiration,
     pub user_info: Option<UserInfo>,
     pub description: Option<String>,
 }

@@ -6,6 +6,8 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use cw20::{Balance, Cw20ReceiveMsg, Cw20CoinVerified, Cw20ExecuteMsg};
+use cw_storage_plus::Bound;
+use cw_utils::Expiration;
 
 use crate::error::ContractError;
 use crate::state::{State, STATE, OTCS, OTCInfo, UserInfo};
@@ -15,6 +17,8 @@ use crate::msg::{InstantiateMsg, QueryMsg, ExecuteMsg, ReceiveMsg, GetOTCsRespon
 const CONTRACT_NAME: &str = "crates.io:otc";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const DEFAULT_LIMIT: u32 = 20;
+const MAX_LIMIT: u32 = 60;
 
 macro_rules! cast {
     ($target: expr, $pat: path) => {
@@ -60,13 +64,15 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    
     match msg {
         ExecuteMsg::Create(msg) => try_create_otc(
             deps,
+            env,
             &info.sender,
             Balance::from(info.funds), 
             msg.ask_balance,    
@@ -84,7 +90,7 @@ pub fn execute(
         ),
         
         ExecuteMsg::Receive(msg) => {
-            execute_receive(deps, info, msg)
+            execute_receive(deps, env, info, msg)
         }
     }
 }
@@ -92,6 +98,7 @@ pub fn execute(
 
 pub fn execute_receive(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     wrapper: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
@@ -108,6 +115,7 @@ pub fn execute_receive(
         ReceiveMsg::Create(msg) => { 
             try_create_otc(
                 deps, 
+                env,
                 &api.addr_validate(&wrapper.sender)?,
                 balance,
                 msg.ask_balance, 
@@ -134,10 +142,11 @@ pub fn execute_receive(
 
 pub fn try_create_otc(
     deps: DepsMut,
+    env: Env,
     seller: &Addr,
     sell_balance: Balance,
     ask_balance: Balance,
-    ends_at: u64,
+    expires: Option<Expiration>,
     user_info: Option<UserInfo>,
     description: Option<String>,
     ) -> Result<Response, ContractError> {
@@ -154,6 +163,10 @@ pub fn try_create_otc(
         ));
     }
 
+    let expires = expires.unwrap_or_default();
+    if expires.is_expired(&env.block) {
+        return Err(ContractError::Expired {});
+    }
 
     let mut new_otc = OTCInfo {
         seller: deps.api.addr_canonicalize(seller.as_str())?,
@@ -165,7 +178,7 @@ pub fn try_create_otc(
         ask_amount: Uint128::from(0 as u8),
         ask_denom: None,
         ask_address: None,
-        ends_at,
+        expires,
         user_info,
         description
     };
@@ -200,13 +213,7 @@ pub fn try_create_otc(
 
             let coin = balance.0.pop().unwrap();
 
-            if balance.0.len() != 0 {
-                return Err(ContractError::Std(
-                    StdError::GenericErr { 
-                        msg: "Cannot create an otc with mupltiple denoms".to_string() 
-                    }
-                ));
-            }
+            if balance.0.len() != 0 { return Err(ContractError::TooManyDenoms{}); }
 
             new_otc.ask_native = true;
             new_otc.ask_amount = coin.amount;
@@ -221,12 +228,11 @@ pub fn try_create_otc(
 
 
     while OTCS.has(deps.storage, config.index) {
-        config.index = (config.index + 1) % 1000;    
+        // okay for ~4 billion
+        config.index += 1;    
     }
 
     OTCS.save(deps.storage, config.index, &new_otc)?;
-    
-    
     STATE.save(deps.storage, &config)?; 
    
 
@@ -254,13 +260,7 @@ pub fn try_swap(
     
     let otc_info = OTCS.load(deps.storage, otc_id)?;
 
-    if otc_info.ask_native ^ native {
-        return Err(ContractError::Std(
-            StdError::GenericErr { 
-                msg: "Wrong denomination".to_string() 
-            }
-        ));
-    }
+    if otc_info.ask_native ^ native { return Err(ContractError::WrongDenom {}); }
 
     let seller = deps.api.addr_humanize(&otc_info.seller)?;
 
@@ -276,20 +276,10 @@ pub fn try_swap(
     let payment_1 : CosmosMsg = if native {
         let mut casted =  cast!(balance, Balance::Native);
         let coin = casted.0.pop().unwrap();
-        if casted.0.len() != 0 {
-            return Err(ContractError::Std(
-                StdError::GenericErr { 
-                    msg: "Can't accept multiple denoms at time".to_string() 
-                }
-            ));
-        }
-        if coin.denom != otc_info.ask_denom.unwrap() {
-            return Err(ContractError::Std(
-                StdError::GenericErr { 
-                    msg: "Wrong denomination".to_string() 
-                }
-            ));
-        }
+
+        if casted.0.len() != 0 { return Err(ContractError::TooManyDenoms{}); }
+        if coin.denom != otc_info.ask_denom.unwrap() { return Err(ContractError::WrongDenom {}); }
+
         if coin.amount < otc_info.ask_amount {
             return Err(ContractError::Std(
                 StdError::GenericErr { 
@@ -304,13 +294,8 @@ pub fn try_swap(
     } else {
         let casted = cast!(balance, Balance::Cw20);
 
-        if casted.address != otc_info.ask_address.unwrap() {
-            return Err(ContractError::Std(
-                StdError::GenericErr { 
-                    msg: "Wrong cw20 token".to_string() 
-                }
-            ));
-        }
+        if casted.address != otc_info.ask_address.unwrap() { return Err(ContractError::WrongDenom {}); }
+
         if casted.amount < otc_info.ask_amount {
             return Err(ContractError::Std(
                 StdError::GenericErr { 
@@ -362,20 +347,54 @@ pub fn try_swap(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetOtcs {} =>to_binary(&query_otcs(deps, env, msg)?)
+        QueryMsg::GetOtcs {
+            include_expired, 
+            start_after, 
+            limit 
+        } =>to_binary(&query_otcs(
+            deps, 
+            env, 
+            msg, 
+            include_expired.unwrap_or_default(),
+            start_after,
+            limit
+        )?)
     }
 }
 
 
 
-fn query_otcs(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<GetOTCsResponse> {
-    let result : StdResult<Vec<_>> = OTCS.range(
-                        deps.storage, 
-                        None, 
-                        None, 
-                        Order::Ascending
-                    )
-                    .collect();
+fn query_otcs(
+    deps: Deps, 
+    env: Env, 
+    _msg: QueryMsg, 
+    include_expired: bool,
+    start_after: Option<u32>,
+    limit: Option<u32>,
+) -> StdResult<GetOTCsResponse> {
+
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+    
+    let start = match start_after {
+        Some(start_after) => Some(Bound::exclusive(start_after)),
+        None => None
+    };
+
+    let result : StdResult<Vec<_>> = OTCS
+    .range(
+        deps.storage, 
+        start, 
+        None, 
+        Order::Ascending
+    )
+    .filter(|otc| 
+        include_expired || (
+            otc.is_ok() && 
+            !otc.as_ref().unwrap().1.expires.is_expired(&env.block) 
+        )
+    )
+    .take(limit)
+    .collect();
 
     //OTCS.load(deps.storage, )
     Ok(GetOTCsResponse { otcs: result? })
