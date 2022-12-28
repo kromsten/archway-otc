@@ -17,7 +17,7 @@ pub struct NewOTC {
     pub ask_balance: Balance, 
 
     // seconds since epoch
-    pub ends_at: Option<Expiration>,
+    pub expires: Option<Expiration>,
 
     // optional user info
     pub user_info: Option<UserInfo>,

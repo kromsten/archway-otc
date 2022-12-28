@@ -76,7 +76,7 @@ pub fn execute(
             &info.sender,
             Balance::from(info.funds), 
             msg.ask_balance,    
-            msg.ends_at,
+            msg.expires,
             msg.user_info,
             msg.description
         ),
@@ -119,7 +119,7 @@ pub fn execute_receive(
                 &api.addr_validate(&wrapper.sender)?,
                 balance,
                 msg.ask_balance, 
-                msg.ends_at,
+                msg.expires,
                 msg.user_info,
                 msg.description
             )
@@ -354,7 +354,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         } =>to_binary(&query_otcs(
             deps, 
             env, 
-            msg, 
             include_expired.unwrap_or_default(),
             start_after,
             limit
@@ -367,7 +366,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 fn query_otcs(
     deps: Deps, 
     env: Env, 
-    _msg: QueryMsg, 
     include_expired: bool,
     start_after: Option<u32>,
     limit: Option<u32>,

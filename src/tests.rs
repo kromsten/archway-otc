@@ -7,12 +7,12 @@ mod tests {
     use cosmwasm_std::testing::{
         mock_dependencies, mock_env, mock_info, mock_dependencies_with_balances, 
     };
-    use cosmwasm_std::{coins, from_binary, DepsMut, Response, Uint128,  Coin, Deps, Api};
+    use cosmwasm_std::{coins, from_binary, DepsMut, Response, Uint128,  Coin, Deps, Api, Env};
     use cw20::Balance;
     use cw_utils::{NativeBalance, Expiration};
 
 
-    fn sell_native_ask_native(deps : DepsMut, count: u32) {
+    fn sell_native_ask_native(deps : DepsMut, count: u32, expires: Option<Expiration>) {
 
         let sell_amount = 5;
         let sell_denom = "token_1";
@@ -23,9 +23,6 @@ mod tests {
         //let api = deps.api;
         
 
-        let alice_balance_before = deps.as_ref().querier.query_balance("alice", "token_1").unwrap();
-        assert_eq!(alice_balance_before.amount, Uint128::from(5 as u8));
-
         let info = mock_info(
             "alice", 
             &coins(
@@ -35,7 +32,7 @@ mod tests {
         
         let msg = ExecuteMsg::Create(NewOTC {
             ask_balance: Balance::Native(NativeBalance(coins(ask_amount.clone(), ask_denom.clone()))),
-            ends_at: None,
+            expires,
             user_info: None,
             description: None,
         });
@@ -70,13 +67,16 @@ mod tests {
                 assert_eq!(info.sell_amount, Uint128::from(sell_amount));
                 assert_eq!(info.sell_denom, Some(sell_denom.to_string()));
 
-                assert_eq!(info.expires, Expiration::Never {} );
+                assert_eq!(info.expires, expires.unwrap_or_default() );
 
                 // asserts other fields of OTCInfo struct
                 assert_eq!(info.user_info, None);
                 assert_eq!(info.description, None);
 
             }
+            Err(ContractError::Expired {}) => {
+                assert!(expires.is_some() && expires.unwrap().is_expired(&mock_env().block));
+            },
             _ => {
                 panic!("Unknown error")
             }
@@ -84,11 +84,19 @@ mod tests {
     }
 
 
-    fn query_otcs(deps: Deps) -> GetOTCsResponse {
-        let res = query(deps, mock_env(), QueryMsg::GetOtcs {
-            include_expired: None,
-            limit: None,
-            start_after: None,
+    fn query_otcs(
+            deps: Deps,
+            env: Env,
+            include_expired: Option<bool>,
+            limit: Option<u32>,
+            start_after: Option<u32>,
+        ) -> GetOTCsResponse {
+        
+        
+        let res = query(deps, env, QueryMsg::GetOtcs {
+            include_expired: include_expired,
+            limit: limit,
+            start_after: start_after,
         }).unwrap();
         let value: GetOTCsResponse = from_binary(&res).unwrap();
         value
@@ -119,19 +127,20 @@ mod tests {
             ("bob", &coins(10, "token_2")),
         ]);
 
+        let env = mock_env();
 
         let count = 0;
 
         instantiate_contract(deps.as_mut());
         
         
-        assert_eq!(query_otcs(deps.as_ref()).otcs.len(), 0);
+        assert_eq!(query_otcs(deps.as_ref(), env.clone(), None, None, None).otcs.len(), 0);
 
 
-        sell_native_ask_native(deps.as_mut(), count.clone());
+        sell_native_ask_native(deps.as_mut(), count.clone(), None);
 
 
-        let otcs = query_otcs(deps.as_ref()).otcs;
+        let otcs = query_otcs(deps.as_ref(), env.clone(), None, None, None).otcs;
         assert_eq!(otcs.len(), 1);
 
         let (id, otc) = &otcs[0];
@@ -206,18 +215,63 @@ mod tests {
     }
    
 
+    #[test]
+    fn queries_work() {
+        let mut deps = mock_dependencies();
+        let mut env = mock_env();
 
-    /* #[test]
-    fn can_query() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
-
+        let mut count  = 0;
         instantiate_contract(deps.as_mut());
+        
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, None, None).otcs.len(), count );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::Hello {}).unwrap();
-        let value: HelloResponse = from_binary(&res).unwrap();
-        assert_eq!("Hello, Archway!", value.msg);
+        sell_native_ask_native(deps.as_mut(), 0, None);
+        count += 1;
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, None, None).otcs.len(), count);
+
+        sell_native_ask_native(deps.as_mut(), 1, None);
+        count += 1;
+
+        sell_native_ask_native(deps.as_mut(), 2, None);
+        count += 1;
+
+        // normal
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, None, None).otcs.len(), count);
+
+        // limit
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, Some(2), None).otcs.len(), 2);
+        
+        // offset
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, None, Some(0)).otcs.len(), 2);
+
+        // limit and offset
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, Some(1), Some(0)).otcs.len(), 1);
+
+        // limit and offset over
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, Some(3), Some(1)).otcs.len(), 1); 
+
+        // offset all
+        assert_eq!(query_otcs(deps.as_ref(),env.clone(), None, Some(5), Some(count as u32)).otcs.len(), 0); 
+        
+        
+        sell_native_ask_native(deps.as_mut(), count as u32, Some(Expiration::AtHeight(12_345+1)));
+        count += 1;
+
+        env.block.height = 12_345 + 2;
+
+        // exclude expired
+        assert_eq!(query_otcs(deps.as_ref(), env.clone(), None, None, None).otcs.len(), count - 1);
+
+        // include expired
+        assert_eq!(query_otcs(deps.as_ref(), env, Some(true), None, None).otcs.len(), count);
+
+
     }
-    */
+   
+
+    
+
+
 
     fn instantiate_contract(deps: DepsMut) -> Response {
         let msg = InstantiateMsg {};
