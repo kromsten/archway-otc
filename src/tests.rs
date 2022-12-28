@@ -165,11 +165,11 @@ mod tests {
         let msg = ExecuteMsg::Swap { otc_id: count.clone() };
 
         let res = execute(deps.as_mut(), mock_env(), same_person_info, msg.clone()).unwrap_err();
-        assert_eq!(res.to_string(), "Can't swap with yourself");
+        assert_eq!(res.to_string(), "Generic error: Can't swap with yourself");
 
 
         let res = execute(deps.as_mut(), mock_env(), smaller_amount_info, msg.clone()).unwrap_err();
-        assert_eq!(res.to_string(), "Sent amount is smaller than what being asked");
+        assert_eq!(res.to_string(), "Generic error: Sent amount is smaller than what being asked");
      
 
         let res = execute(deps.as_mut(), mock_env(), wrong_denom_info, msg.clone()).unwrap_err();
